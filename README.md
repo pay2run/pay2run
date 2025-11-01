@@ -1,135 +1,182 @@
-# Turborepo starter
+# pay2run
 
-This Turborepo starter is maintained by the Turborepo core team.
+A secure, scalable platform for monetizing API calls using payment rails. This monorepo contains the public SDK packages for pay2.run.
 
-## Using this example
+## Architecture Overview
 
-Run the following command:
+pay2.run enables creators (sellers) to monetize API endpoints by requiring payment before execution. Runners (buyers) pay using their preferred payment method and receive a JWT token that authorizes the API call.
 
-```sh
-npx create-turbo@latest
+### Core Flow
+
+1. **Creator Flow**: A seller defines an Action (API endpoint configuration) through the web dashboard or the SDK.
+2. **Runner Flow**: A buyer uses the React SDK to execute an Action:
+   - SDK requests execution → receives 402 Payment Required
+   - User completes payment through their preferred payment method
+   - Payment Verifier confirms payment
+   - SDK receives JWT and makes authorized API call
+   - Result is returned to the user
+
+## Packages
+
+This monorepo contains three public npm packages:
+
+### `@pay2run/types`
+
+The foundational TypeScript definitions shared across all packages. Uses **viem** for EVM chain types and supports Solana natively. Contains:
+
+- `CreatorPaymentConfig`: Discriminated union for EVM or Solana payments
+  - `EVMPaymentConfig`: Uses viem's `Chain` type for type-safe EVM chains
+  - `SolanaPaymentConfig`: Native Solana cluster and SPL token support
+- `PaymentMethodDetails`: Payment protocol details (Solana Pay, EIP-681, etc.)
+- `ActionConfig`: Public-facing Action details
+- `ActionConfigPayload`: Configuration payload for creating Actions
+- `RunActionOptions`: Options for running Actions
+
+**Peer Dependencies**: `viem ^2.0.0`
+
+### `@pay2run/node`
+
+The backend/admin SDK for creating and managing Actions. Requires a secret API key and should only be used in server environments.
+
+```typescript
+import { Pay2Run } from "@pay2run/node";
+import { base } from "viem/chains";
+
+const client = new Pay2Run({ apiKey: "your-api-key" });
+
+// Create an Action with Base (EVM) payment
+const action = await client.actions.create({
+  name: "Translate to Spanish",
+  targetUrl: "https://api.example.com/translate",
+  httpMethod: "POST",
+  secrets: { API_KEY: "sk_123..." },
+  headers: { Authorization: "Bearer {{API_KEY}}" },
+  price: "0.05",
+  currency: "USD",
+  payment: {
+    type: "evm",
+    chain: base, // Use any chain from viem/chains
+    token: {
+      symbol: "USDC",
+      name: "USD Coin",
+      decimals: 6,
+      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    },
+    destinationAddress: "0x1234...5678",
+  },
+});
+
+// Create with Solana payment
+const solanaAction = await client.actions.create({
+  name: "Translate to French",
+  targetUrl: "https://api.example.com/translate",
+  httpMethod: "POST",
+  secrets: { API_KEY: "sk_123..." },
+  headers: { Authorization: "Bearer {{API_KEY}}" },
+  price: "0.05",
+  currency: "USD",
+  payment: {
+    type: "solana",
+    cluster: "mainnet-beta",
+    token: {
+      symbol: "USDC",
+      name: "USD Coin",
+      decimals: 6,
+      mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    },
+    destinationAddress: "7ZpZu...seller-wallet-address",
+  },
+});
 ```
 
-## What's inside?
+### `@pay2run/react`
 
-This Turborepo includes the following packages/apps:
+The client-side SDK for running Actions in React applications. Provides hooks and providers for handling the payment flow.
 
-### Apps and Packages
+```typescript
+import { Pay2RunProvider, useAction } from '@pay2run/react';
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+function App() {
+  return (
+    <Pay2RunProvider
+      renderPaymentUI={(details, onComplete, onCancel) => (
+        <PaymentModal
+          paymentDetails={details}
+          onComplete={onComplete}
+          onCancel={onCancel}
+        />
+      )}
+    >
+      <YourComponent />
+    </Pay2RunProvider>
+  );
+}
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+function YourComponent() {
+  const { run, status, data, error } = useAction('action-id');
 
-### Utilities
+  const handleRun = async () => {
+    await run({ body: { text: 'Hello' } });
+  };
 
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
-```
-
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+  return (
+    <div>
+      <button onClick={handleRun}>Run Action</button>
+      {status === 'success' && <pre>{JSON.stringify(data, null, 2)}</pre>}
+    </div>
+  );
+}
 ```
 
-### Develop
+## Development
 
-To develop all apps and packages, run the following command:
+### Prerequisites
 
-```
-cd my-turborepo
+- Node.js >= 18
+- pnpm 9.0.0
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
+### Setup
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
+```bash
+# Install dependencies
+pnpm install
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+# Run type checking
+pnpm run check-types
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
+# Build all packages
+pnpm run build
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+# Run linting
+pnpm run lint
 ```
 
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+### Package Structure
 
 ```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+pay2run/
+├── packages/
+│   └── types/          # @pay2run/types
+├── sdks/
+│   ├── node/           # @pay2run/node
+│   └── react/          # @pay2run/react
+└── apps/               # (Default Next.js apps - can be removed)
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+## Publishing
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+All packages are configured for public npm publishing:
 
+```bash
+# Build packages
+pnpm run build
+
+# Publish (from each package directory)
+cd packages/types && pnpm publish --access public
+cd ../../sdks/node && pnpm publish --access public
+cd ../react && pnpm publish --access public
 ```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
+## License
 
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+MIT
