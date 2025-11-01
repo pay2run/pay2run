@@ -1,5 +1,5 @@
-import type { Chain } from "viem/chains";
 import type { Address } from "viem";
+import type { Chain } from "viem/chains";
 
 /**
  * Solana cluster/network configuration

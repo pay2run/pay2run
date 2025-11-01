@@ -1,5 +1,5 @@
-import React, { createContext, useContext, ReactNode } from 'react';
-import { PaymentRequestDetails } from '@pay2run/types';
+import type { PaymentRequestDetails } from "@pay2run/types";
+import React, { createContext, useContext, type ReactNode } from "react";
 
 interface Pay2RunProviderProps {
   children: ReactNode;
@@ -18,15 +18,12 @@ interface Pay2RunProviderProps {
 }
 
 interface Pay2RunContextValue {
-  renderPaymentUI: Pay2RunProviderProps['renderPaymentUI'];
+  renderPaymentUI: Pay2RunProviderProps["renderPaymentUI"];
 }
 
 const Pay2RunContext = createContext<Pay2RunContextValue | null>(null);
 
-export const Pay2RunProvider = ({
-  children,
-  renderPaymentUI,
-}: Pay2RunProviderProps) => {
+export const Pay2RunProvider = ({ children, renderPaymentUI }: Pay2RunProviderProps) => {
   return (
     <Pay2RunContext.Provider value={{ renderPaymentUI }}>
       {children}
@@ -37,8 +34,7 @@ export const Pay2RunProvider = ({
 export const usePay2RunContext = () => {
   const context = useContext(Pay2RunContext);
   if (!context) {
-    throw new Error('usePay2RunContext must be used within Pay2RunProvider');
+    throw new Error("usePay2RunContext must be used within Pay2RunProvider");
   }
   return context;
 };
-

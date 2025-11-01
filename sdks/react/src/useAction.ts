@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
-import { RunActionOptions, PaymentRequestDetails } from '@pay2run/types';
-import { usePay2RunContext } from './provider';
+import type { PaymentRequestDetails, RunActionOptions } from "@pay2run/types";
+import { useCallback, useState } from "react";
+import { usePay2RunContext } from "./provider";
 
-type ActionStatus = 'idle' | 'requires_payment' | 'pending' | 'success' | 'error';
+type ActionStatus = "idle" | "requires_payment" | "pending" | "success" | "error";
 
 interface UseActionResult<T> {
   /** The function to call to start the Action execution. */
@@ -17,14 +17,16 @@ interface UseActionResult<T> {
   paymentDetails: PaymentRequestDetails | null;
 }
 
-const API_BASE_URL = 'https://api.pay2.run';
+const API_BASE_URL = "https://api.pay2.run";
 
 export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
   const { renderPaymentUI } = usePay2RunContext();
-  const [status, setStatus] = useState<ActionStatus>('idle');
+  const [status, setStatus] = useState<ActionStatus>("idle");
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [paymentDetails, setPaymentDetails] = useState<PaymentRequestDetails | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentRequestDetails | null>(
+    null
+  );
 
   const pollForPayment = useCallback(
     async (paymentRequestId: string): Promise<string> => {
@@ -36,13 +38,13 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
           const response = await fetch(
             `${API_BASE_URL}/v1/payments/${paymentRequestId}/status`,
             {
-              method: 'GET',
+              method: "GET",
             }
           );
 
           if (response.status === 200) {
             const result = await response.json();
-            if (result.status === 'completed' && result.jwt) {
+            if (result.status === "completed" && result.jwt) {
               return result.jwt;
             }
           }
@@ -55,14 +57,14 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
         }
       }
 
-      throw new Error('Payment verification timeout');
+      throw new Error("Payment verification timeout");
     },
     []
   );
 
   const run = useCallback(
     async (options?: RunActionOptions) => {
-      setStatus('pending');
+      setStatus("pending");
       setError(null);
       setData(null);
       setPaymentDetails(null);
@@ -71,9 +73,9 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
         // 1. Make the initial POST request to `/execute/{actionId}`
         const executeUrl = `${API_BASE_URL}/v1/execute/${actionId}`;
         const executeResponse = await fetch(executeUrl, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             ...(options?.headers || {}),
           },
           body: options?.body ? JSON.stringify(options.body) : undefined,
@@ -81,10 +83,9 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
 
         // 2. If 402 response (Payment Required)
         if (executeResponse.status === 402) {
-          const paymentDetails: PaymentRequestDetails =
-            await executeResponse.json();
+          const paymentDetails: PaymentRequestDetails = await executeResponse.json();
           setPaymentDetails(paymentDetails);
-          setStatus('requires_payment');
+          setStatus("requires_payment");
 
           // Await user interaction via the renderPaymentUI callback
           return new Promise<void>((resolve, reject) => {
@@ -101,9 +102,9 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
 
                 // Make the second, authorized request with JWT
                 const finalResponse = await fetch(executeUrl, {
-                  method: 'POST',
+                  method: "POST",
                   headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                     Authorization: `Bearer ${jwt}`,
                     ...(options?.headers || {}),
                   },
@@ -118,11 +119,11 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
 
                 const result = await finalResponse.json();
                 setData(result);
-                setStatus('success');
+                setStatus("success");
                 resolve();
               } catch (err) {
                 setError(err as Error);
-                setStatus('error');
+                setStatus("error");
                 reject(err);
               }
             };
@@ -130,9 +131,9 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
             const onCancel = () => {
               if (paymentCompleted || paymentCancelled) return;
               paymentCancelled = true;
-              setStatus('idle');
+              setStatus("idle");
               setPaymentDetails(null);
-              reject(new Error('Payment cancelled by user'));
+              reject(new Error("Payment cancelled by user"));
             };
 
             // Render the payment UI
@@ -144,17 +145,15 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
         if (executeResponse.ok) {
           const result = await executeResponse.json();
           setData(result);
-          setStatus('success');
+          setStatus("success");
           return;
         }
 
         // Handle other error statuses
-        throw new Error(
-          `Unexpected response status: ${executeResponse.status}`
-        );
+        throw new Error(`Unexpected response status: ${executeResponse.status}`);
       } catch (e) {
         setError(e as Error);
-        setStatus('error');
+        setStatus("error");
         throw e;
       }
     },
@@ -163,4 +162,3 @@ export const useAction = <T = any>(actionId: string): UseActionResult<T> => {
 
   return { run, status, data, error, paymentDetails };
 };
-
